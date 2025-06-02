@@ -3,5 +3,5 @@
 
 # Large files that exceed GitHub limits
 vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0.tgz
-vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0/libs/rocksdbjni-9.7.3.jar
+vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0/
 
