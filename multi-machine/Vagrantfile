@@ -1,0 +1,50 @@
+Vagrant.configure("2") do |config|
+  # Web1 - Ubuntu 20.04
+  config.vm.define "web1" do |web1|
+    web1.vm.box = "ubuntu/focal64"
+    web1.vm.hostname = "web1.local"
+    web1.vm.network "private_network", ip: "192.168.56.10"
+
+    web1.vm.provision "shell", inline: <<-SHELL
+      echo "Provisioning web1 (Ubuntu 20.04)"
+      apt-get update
+      apt-get install -y apache2
+    SHELL
+  end
+
+  # Web2 - Ubuntu 22.04
+  config.vm.define "web2" do |web2|
+    web2.vm.box = "ubuntu/jammy64"
+    web2.vm.hostname = "web2.local"
+    web2.vm.network "private_network", ip: "192.168.56.11"
+
+    web2.vm.provision "shell", inline: <<-SHELL
+      echo "Provisioning web2 (Ubuntu 22.04)"
+      apt-get update
+      apt-get install -y nginx
+    SHELL
+  end
+
+  # DB1 - CentOS 7
+  config.vm.define "db1" do |db1|
+    db1.vm.box = "centos/7"
+    db1.vm.hostname = "db1.local"
+    db1.vm.network "private_network", ip: "192.168.56.12"
+
+    db1.vm.provision "shell", inline: <<-SHELL
+      echo "Provisioning db1 (CentOS 7)"
+      # Fix repository issues first
+      sudo cp -a /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+      sudo sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-Base.repo
+      sudo sed -i 's/#baseurl=http:\\/\\/mirror.centos.org/baseurl=http:\\/\\/vault.centos.org/g' /etc/yum.repos.d/CentOS-Base.repo
+      sudo yum clean all
+      sudo yum repolist
+      
+      # Install and configure PostgreSQL
+      sudo yum install -y postgresql-server postgresql-contrib
+      sudo postgresql-setup initdb
+      sudo systemctl enable postgresql
+      sudo systemctl start postgresql
+    SHELL
+  end
+end
