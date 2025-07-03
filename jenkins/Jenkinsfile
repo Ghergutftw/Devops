@@ -68,35 +68,36 @@ pipeline {
             }
         }
         stage('Deploy to Nexus') {
-        steps {
-            script {
-                // Read from pom.xml
-                def pom = readMavenPom file: 'pom.xml'
-                
-                // Build dynamic version with timestamp
-                def dynamicVersion = "${pom.version}-${env.BUILD_ID}-${env.BUILD_TIMESTAMP}"
-                
-                // Construct expected artifact file name (e.g., vprofile-v2.war)
-                def artifactFile = "target/${pom.artifactId}-${pom.version}.war"
+            steps {
+                script {
+                    // Read from pom.xml
+                    def pom = readMavenPom file: 'pom.xml'
+                    
+                    // Build dynamic version with timestamp
+                    def dynamicVersion = "${pom.version}-${env.BUILD_ID}-${env.BUILD_TIMESTAMP}"
+                    
+                    // Construct expected artifact file name (e.g., vprofile-v2.war)
+                    def artifactFile = "target/${pom.artifactId}-${pom.version}.war"
 
-                // Upload to Nexus
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: '172.31.90.52:8081',
-                    groupId: pom.groupId,
-                    version: dynamicVersion,
-                    repository: 'vprofile-repo',
-                    credentialsId: 'nexuslogin',
-                    artifacts: [
-                        [
-                            artifactId: pom.artifactId,
-                            classifier: '',
-                            file: artifactFile,
-                            type: 'war'
+                    // Upload to Nexus
+                    nexusArtifactUploader(
+                        nexusVersion: 'nexus3',
+                        protocol: 'http',
+                        nexusUrl: '172.31.90.52:8081',
+                        groupId: pom.groupId,
+                        version: dynamicVersion,
+                        repository: 'vprofile-repo',
+                        credentialsId: 'nexuslogin',
+                        artifacts: [
+                            [
+                                artifactId: pom.artifactId,
+                                classifier: '',
+                                file: artifactFile,
+                                type: 'war'
+                            ]
                         ]
-                    ]
-                )
+                    )
+                }
             }
         }
     }
