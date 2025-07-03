@@ -1,0 +1,111 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"    # Ubuntu 22.04 LTS, supported by Jenkins
+  config.vm.hostname = "jenkins-server"
+
+  # Forward Jenkins guest port 8080 to host 8081
+  config.vm.network "forwarded_port", guest: 8080, host: 8081
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "jenkins-dev-env"
+    vb.memory = "4096"
+    vb.cpus = "2"
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+    #!/bin/bash
+
+    echo "--- Update packages and install prerequisites ---"
+    apt-get update -y > /dev/null 2>&1
+    apt-get install -y wget gnupg software-properties-common curl > /dev/null 2>&1
+
+    echo "--- Install OpenJDK 21 ---"
+    mkdir -p /etc/apt/keyrings
+    wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | tee /etc/apt/keyrings/adoptium.asc > /dev/null
+    echo "deb [signed-by=/etc/apt/keyrings/adoptium.asc] https://packages.adoptium.net/artifactory/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/adoptium.list > /dev/null
+    apt-get update -y > /dev/null 2>&1
+    apt-get install -y temurin-21-jdk > /dev/null 2>&1
+    update-java-alternatives --set temurin-21-jdk-amd64
+
+    echo "--- Install Maven ---"
+    apt-get install -y maven > /dev/null 2>&1
+
+    echo "--- Install Jenkins ---"
+    curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+    echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" | tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+    apt-get update -y > /dev/null 2>&1
+    apt-get install -y jenkins > /dev/null 2>&1
+
+    echo "--- Disable Jenkins setup wizard and create admin user ---"
+    mkdir -p /var/lib/jenkins/init.groovy.d
+
+    cat <<EOF > /var/lib/jenkins/init.groovy.d/basic-security.groovy
+#!groovy
+import jenkins.model.*
+import hudson.security.*
+
+def instance = Jenkins.getInstance()
+println "--> creating local admin user"
+def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+hudsonRealm.createAccount("admin", "admin")
+instance.setSecurityRealm(hudsonRealm)
+
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+
+instance.save()
+EOF
+
+    # Disable setup wizard
+    echo "JAVA_ARGS=\"-Djenkins.install.runSetupWizard=false\"" >> /etc/default/jenkins
+
+    echo "--- Start Jenkins ---"
+    systemctl enable jenkins > /dev/null 2>&1
+    systemctl restart jenkins
+
+    echo "Waiting for Jenkins to become available..."
+    until curl -s http://localhost:8080/login > /dev/null; do
+      sleep 5
+    done
+    sleep 20
+
+    echo "--- Download Jenkins CLI ---"
+    wget -q http://localhost:8080/jnlpJars/jenkins-cli.jar -O /tmp/jenkins-cli.jar
+
+    echo "--- Create dummy Jenkins job ---"
+    cat <<EOF > /tmp/dummy-job-config.xml
+<project>
+  <actions/>
+  <description>Dummy job created via Vagrant provision</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>echo "Hello from Dummy Job!"</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers/>
+  <buildWrappers/>
+</project>
+EOF
+
+    echo "--- Use Jenkins CLI to create job ---"
+    java -jar /tmp/jenkins-cli.jar -s http://localhost:8080/ -auth admin:admin create-job dummy-job < /tmp/dummy-job-config.xml
+
+    echo "--------------------------------------------------------"
+    echo "✅ Jenkins Setup Complete!"
+    echo "Access Jenkins at: http://localhost:8081"
+    echo ""
+    echo "👤 Credentials: admin / admin"
+    echo "🔧 Dummy Job: http://localhost:8081/job/dummy-job/"
+    echo "☕ JDK 21 Path: /usr/lib/jvm/temurin-21-jdk-amd64"
+    echo "--------------------------------------------------------"
+  SHELL
+end

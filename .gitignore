@@ -1,0 +1,27 @@
+# Vagrant
+.vagrant/
+/secrets
+# ignore all .pem files
+*.pem
+
+*.csv
+
+# ignore all .key files
+*.key
+
+#ignore all generated code from a spring boot angular app
+target/
+# ignore all node_modules
+node_modules/
+# ignore all dist files
+dist/
+# ignore all build files
+build/
+# ignore all coverage files
+coverage/
+
+
+# Large files that exceed GitHub limits
+vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0.tgz
+vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0/
+
