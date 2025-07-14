@@ -1,0 +1,1 @@
+I want to try and run jenkins,nexus,sonarqube all in a vagrant file to not use aws

@@ -9,6 +9,8 @@
 # ignore all .key files
 *.key
 
+*.zip
+
 #ignore all generated code from a spring boot angular app
 target/
 # ignore all node_modules

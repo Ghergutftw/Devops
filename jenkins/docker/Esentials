@@ -1,0 +1,57 @@
+Required Jenkins Plugins
+Core Pipeline Plugins (Essential)
+
+Pipeline: Stage View - pipeline-stage-view
+Pipeline: Groovy - workflow-cps
+Pipeline: Job - workflow-job
+Pipeline: API - workflow-api
+Pipeline: Basic Steps - workflow-basic-steps
+Pipeline: Declarative - pipeline-model-definition
+
+Build & Tool Integration
+
+Maven Integration - maven-plugin
+JDK Tool - jdk-tool
+Git - git
+GitHub - github
+Workspace Cleanup - ws-cleanup
+
+Visual & Reporting
+
+AnsiColor - ansicolor ⚠️ This is the missing plugin causing your error
+HTML Publisher - htmlpublisher
+JUnit - junit
+Warnings Next Generation - warnings-ng
+Test Results Analyzer - test-results-analyzer
+
+Quality & Security
+
+SonarQube Scanner - sonar
+Checkstyle - checkstyle
+PMD - pmd
+SpotBugs - spotbugs
+OWASP Dependency Check - dependency-check-jenkins-plugin
+
+Docker & Container
+
+Docker Pipeline - docker-workflow
+Docker - docker-plugin
+Docker Build Step - docker-build-step
+
+AWS Integration
+
+AWS Steps - pipeline-aws
+Amazon ECR - amazon-ecr
+CloudBees AWS Credentials - aws-credentials
+
+Notifications
+
+Email Extension - email-ext
+Mailer - mailer
+
+Utility Plugins
+
+Timestamper - timestamper
+Build Timeout - build-timeout
+Credentials Binding - credentials-binding
+Credentials - credentials

@@ -1,7 +1,7 @@
 pipeline {
     agent any
     tools {
-        maven 'MAVEN_3.9.10'
+        maven 'MAVEN3.9.10'
         jdk 'JDK17'
     }
     stages {
@@ -41,15 +41,16 @@ pipeline {
             }
         }
         stage('SonarQube analysis - Uploading results') {
+            // Try to diff the environment variable name
             environment {
-                scannerHome = tool 'SonarQubeScanner'
+                scannerHome = tool 'SONAR_HOME'
             }
             steps {
-                withSonarQubeEnv('vprofile') {
+                withSonarQubeEnv('SONAR_HOME') {
                     sh '''
                         ${scannerHome}/bin/sonar-scanner \
                         -Dsonar.projectKey=vprofile \
-                        -Dsonar.projectName=vprofile-repo \
+                        -Dsonar.projectName=vprofile \
                         -Dsonar.projectVersion=1.0 \
                         -Dsonar.sources=src/ \
                         -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
@@ -60,40 +61,39 @@ pipeline {
                 }
             }
         }
-        // stage('SonarQube Quality Gate') {
-        //     steps {
-        //         timeout(time: 2, unit: 'MINUTES') {
-        //             waitForQualityGate abortPipeline: true
-        //         }
-        //     }
-        // }
-        stage('Deploy to Nexus') {
-        steps {
-            script {
-                def pom = readMavenPom file: 'pom.xml'
-                def dynamicVersion = "${pom.version}-${env.BUILD_ID}-${env.BUILD_TIMESTAMP}"
-                def artifactFile = "target/${pom.artifactId}-${pom.version}.war" // update if needed
-
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: 'http://192.168.56.11:8081',
-                    groupId: pom.groupId,
-                    version: dynamicVersion,
-                    repository: 'vprofile',
-                    credentialsId: 'nexus',
-                    artifacts: [
-                        [
-                            artifactId: pom.artifactId,
-                            classifier: '',
-                            file: artifactFile,
-                            type: 'war'
-                        ]
-                    ]
-                )
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 15, unit: 'SECONDS') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
-    }
+        stage('Deploy to Nexus') {
+            steps {
+                script {
+                    def pom = readMavenPom file: 'pom.xml'
+                    def dynamicVersion = "${pom.version}-${env.BUILD_ID}-${env.BUILD_TIMESTAMP}"
+                    def artifactFile = "target/${pom.artifactId}-${pom.version}.war" // update if needed
 
+                    nexusArtifactUploader(
+                        nexusVersion: 'nexus3',
+                        protocol: 'http',
+                        nexusUrl: '192.168.56.11:8081',
+                        groupId: pom.groupId,
+                        version: dynamicVersion,
+                        repository: 'vprofile',
+                        credentialsId: 'NEXUS_CREDENTIALS',
+                        artifacts: [
+                            [
+                                artifactId: pom.artifactId,
+                                classifier: '',
+                                file: 'target/vprofile-v2.war',
+                                type: 'war'
+                            ]
+                        ]
+                    )
+                }
+            }
+        }
     }
 }

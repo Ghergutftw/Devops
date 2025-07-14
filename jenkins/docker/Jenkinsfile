@@ -1,21 +1,28 @@
 pipeline {
     agent any
+
     tools {
-        maven 'MAVEN_3.9.10'
+        maven 'MAVEN3.9.10'
         jdk 'JDK17'
     }
+
+    environment {
+        // Service:REGION:CredentialID
+        registryCredential = 'ecr:us-east-1:awscreds'
+        imageName = '202630627892.dkr.ecr.us-east-1.amazonaws.com/vprofile'
+        vprofileRegistry = 'https://202630627892.dkr.ecr.us-east-1.amazonaws.com'
+        cluster = "vprofile"
+        service = "vprofileappsvc"
+    }
+
     stages {
-        stage('Clean Workspace') {
+
+        stage('Fetch code') {
             steps {
-                cleanWs()
+                git branch: 'docker', url: 'https://github.com/hkhcoder/vprofile-project.git'
             }
         }
-        stage('Fetch Code') {
-            steps {
-                echo "Fetching code from GitHub..."
-                git branch: 'atom', url: 'https://github.com/hkhcoder/vprofile-project.git'
-            }
-        }
+
         stage('Build') {
             steps {
                 echo "Building project (skip tests)..."
@@ -24,28 +31,31 @@ pipeline {
             post {
                 success {
                     echo "Archiving artifacts..."
-                   // archiveArtifacts artifacts: '**/target/*.war'
+                    // archiveArtifacts artifacts: '**/target/*.war'
                 }
             }
         }
+
         stage('Unit Test') {
             steps {
                 echo "Running unit tests..."
                 sh 'mvn test'
             }
         }
+
         stage('Checkstyle Analysis') {
             steps {
                 echo "Running Checkstyle analysis..."
                 sh 'mvn checkstyle:checkstyle'
             }
         }
+
         stage('SonarQube analysis - Uploading results') {
             environment {
                 scannerHome = tool 'SonarQubeScanner'
             }
             steps {
-                withSonarQubeEnv('vprofile') {
+                withSonarQubeEnv('sonar_qube_server') {
                     sh '''
                         ${scannerHome}/bin/sonar-scanner \
                         -Dsonar.projectKey=vprofile \
@@ -60,6 +70,8 @@ pipeline {
                 }
             }
         }
+
+        // Uncomment if you want to enable the Quality Gate check
         // stage('SonarQube Quality Gate') {
         //     steps {
         //         timeout(time: 2, unit: 'MINUTES') {
@@ -67,33 +79,37 @@ pipeline {
         //         }
         //     }
         // }
-        stage('Deploy to Nexus') {
-        steps {
-            script {
-                def pom = readMavenPom file: 'pom.xml'
-                def dynamicVersion = "${pom.version}-${env.BUILD_ID}-${env.BUILD_TIMESTAMP}"
-                def artifactFile = "target/${pom.artifactId}-${pom.version}.war" // update if needed
 
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: 'http://192.168.56.11:8081',
-                    groupId: pom.groupId,
-                    version: dynamicVersion,
-                    repository: 'vprofile',
-                    credentialsId: 'nexus',
-                    artifacts: [
-                        [
-                            artifactId: pom.artifactId,
-                            classifier: '',
-                            file: artifactFile,
-                            type: 'war'
-                        ]
-                    ]
-                )
+        stage('Build App Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${imageName}:${BUILD_NUMBER}", "./Docker-files/app/multistage/")
+                }
             }
         }
-    }
+
+        stage('Upload App Image') {
+            steps {
+                script {
+                    docker.withRegistry(vprofileRegistry, registryCredential) {
+                        dockerImage.push("$BUILD_NUMBER")
+                        dockerImage.push('latest')
+                    }
+                }
+            }
+        }
+        stage('Remove Container Image') {
+            steps {
+                sh 'docker rmi -f $(docker images -a -q)'
+            }
+        }
+        stage('Deploy to ECS') {
+            steps {
+                withAWS(credentials: 'awscreds', region: 'us-east-1') {
+                    sh "aws ecs update-service --cluster ${cluster} --service ${service} --force-new-deployment"
+                }
+            }
+}
 
     }
 }
