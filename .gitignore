@@ -27,3 +27,8 @@ coverage/
 vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0.tgz
 vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0/
 
+.terraform/
+.terraform*
+
+*.pub
+
