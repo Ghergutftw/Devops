@@ -1,0 +1,22 @@
+---
+- name: Webserver setup and deployment
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Install apache2
+      ansible.builtin.apt:
+        name: apache2
+        state: present
+        update_cache: yes
+
+    - name: Start apache2 service
+      ansible.builtin.service:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: Copy index.html to Apache web root
+      ansible.builtin.copy:
+        src: files/index.html
+        dest: /var/www/html/index.html
+        backup: yes

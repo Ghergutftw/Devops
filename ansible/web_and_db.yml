@@ -1,0 +1,29 @@
+---
+- name: Webserver setup
+  hosts: webservers
+  become: true
+  tasks:
+    - name: Install apache2
+      ansible.builtin.yum:
+        name: apache2
+        state: present
+    - name: Start apache2 service
+      ansible.builtin.service:
+        name: apache2
+        state: started
+        enabled: true 
+
+- name: DBserver setup
+  hosts: dbservers
+  become: yes
+  tasks:
+  - name: Install mariadb-server
+    ansible.builtin.yum:
+      name: mariadb-server
+      state: present
+  - name: Start mariadb service
+    ansible.builtin.service:
+      name: mariadb
+      state: started
+      enabled: true
+
