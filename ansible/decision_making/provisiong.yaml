@@ -1,0 +1,15 @@
+---
+- name: Provisioning servers
+  hosts: all
+  become: yes
+  tasks:
+   - name : Install ntp agent of ubuntu
+     ansible.builtin.apt:
+       name: ntp
+       state: present
+     when: ansible_os_family == "Debian"
+   - name : Install ntp agent of centos
+     ansible.builtin.yum:
+       name: chrony
+       state: present
+     when: ansible_os_family == "RedHat"

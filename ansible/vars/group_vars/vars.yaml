@@ -1,0 +1,7 @@
+---
+- name: Understanding vars
+  hosts: all
+  become: yes
+  vars:
+    USRM: playuser
+    COMM: varaible 

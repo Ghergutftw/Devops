@@ -1,0 +1,5 @@
+- name: Provision web server with NGINX
+  hosts: web
+  become: yes
+  roles:
+    - nginx
