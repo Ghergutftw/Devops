@@ -1,0 +1,11 @@
+FROM mysql:8.0.33
+LABEL maintainer="Krunky"
+LABEL description="Docker image for MySQL 8.0.33"
+
+ENV MYSQL_ROOT_PASSWORD=vprodbpass
+ENV MYSQL_DATABASE=accounts
+ENV MYSQL_USER=root
+
+ADD db_backup.sql docker-entrypoint-initdb.d/db_backup.sql
+
+EXPOSE 3306

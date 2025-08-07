@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  vprodb:
+  # For running docker-compose build, ensure you have a Dockerfile in the db directory
+    build:
+      context: ./db
+      dockerfile: Dockerfile         # optional if named Dockerfile
+    image: ghergutmadalin/vprofiledb
+    container_name: vprodb
+    ports:
+      - "3306:3306"
+    volumes:
+      - vprodbdata:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=vprodbpass
+
+  vprocache01:
+    image: memcached
+    ports:
+      - "11211:11211"
+
+  vpromq01:
+    image: rabbitmq
+    ports:
+      - "5672:5672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+
+  vproapp:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    image: ghergutmadalin/vprofileapp
+    container_name: vproapp
+    ports:
+      - "8080:8080"
+    volumes:
+      - vproappdata:/usr/local/tomcat/webapps
+
+  vproweb:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: ghergutmadalin/vprofileweb
+    container_name: vproweb
+    ports:
+      - "80:80"
+
+volumes:
+  vprodbdata: {}
+  vproappdata: {}
