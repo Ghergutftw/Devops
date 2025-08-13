@@ -1,0 +1,63 @@
+# WordPress Deployment - Manages WordPress application pods
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+spec:
+  replicas: {{ .Values.replicaCount.wordpress }}
+  strategy:
+    type: Recreate  # Ensures clean restarts for stateful apps
+  selector:
+    matchLabels:
+      {{- include "wordpress.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: wordpress
+  template:
+    metadata:
+      labels:
+        {{- include "wordpress.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: wordpress
+    spec:
+      containers:
+      - name: wordpress
+        image: "{{ .Values.wordpress.image.repository }}:{{ .Values.wordpress.image.tag }}"
+        imagePullPolicy: {{ .Values.wordpress.image.pullPolicy }}
+        env:
+        # Database connection settings
+        - name: WORDPRESS_DB_HOST
+          value: {{ include "wordpress.fullname" . }}-mysql:{{ .Values.mysql.service.port }}
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "wordpress.fullname" . }}-mysql-pass
+              key: password
+        - name: WORDPRESS_DB_NAME
+          value: {{ .Values.mysql.database.name }}
+        ports:
+        - containerPort: 80
+          name: http
+        {{- if .Values.wordpress.resources }}
+        resources:
+          {{- toYaml .Values.wordpress.resources | nindent 10 }}
+        {{- end }}
+        {{- if .Values.wordpress.persistence.enabled }}
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+        {{- end }}
+      {{- if .Values.wordpress.persistence.enabled }}
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: {{ include "wordpress.fullname" . }}-wordpress-pvc
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

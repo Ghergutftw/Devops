@@ -1,0 +1,21 @@
+apiVersion: v2
+name: wordpress
+description: A Helm chart for WordPress with MySQL database
+type: application
+version: 1.0.0
+appVersion: "4.8"
+keywords:
+  - wordpress
+  - cms
+  - blog
+  - http
+  - web
+  - php
+sources:
+  - https://github.com/wordpress/wordpress
+maintainers:
+  - name: Your Name
+    email: your.email@example.com
+home: https://wordpress.org
+icon: https://bitnami.com/assets/stacks/wordpress/img/wordpress-stack-220x234.png
+dependencies: []

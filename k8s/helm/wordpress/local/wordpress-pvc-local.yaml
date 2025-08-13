@@ -1,0 +1,14 @@
+# WordPress PVC for Docker Desktop - Uses default local storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-pv-claim
+  labels:
+    app: wordpress
+spec:
+  accessModes:
+    - ReadWriteOnce  # Only one pod can mount this volume at a time
+  resources:
+    requests:
+      storage: 10Gi  # Storage for WordPress files, themes, plugins, uploads
+  # storageClassName: "" - Use default local storage (removed AWS-specific class)

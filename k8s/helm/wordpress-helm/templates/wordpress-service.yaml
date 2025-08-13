@@ -1,0 +1,18 @@
+# WordPress Service - Internal endpoint for ingress to route traffic
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+spec:
+  type: {{ .Values.wordpress.service.type }}
+  ports:
+    - port: {{ .Values.wordpress.service.port }}
+      targetPort: {{ .Values.wordpress.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "wordpress.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress

@@ -1,0 +1,27 @@
+# WordPress Ingress Configuration
+# This ingress routes external traffic from krunky.xyz to your WordPress service
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress-ingress
+  labels:
+    app: wordpress
+  annotations:
+    # Specifies which ingress controller to use (nginx in this case)
+    kubernetes.io/ingress.class: "nginx"
+    # Rewrites the URL path before sending to backend service
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  # Route traffic from krunky.xyz domain to WordPress
+  - host: krunky.xyz
+    http:
+      paths:
+      # All paths (/) under krunky.xyz go to WordPress service
+      - path: /
+        pathType: Prefix  # Matches all paths starting with /
+        backend:
+          service:
+            name: wordpress    # Target service name
+            port:
+              number: 80       # Target service port

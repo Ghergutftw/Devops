@@ -1,0 +1,96 @@
+# Default values for WordPress Helm chart
+# This file contains configurable parameters and their default values
+
+# WordPress Configuration
+wordpress:
+  image:
+    repository: wordpress
+    tag: "4.8-apache"
+    pullPolicy: IfNotPresent
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+  
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Persistent storage for WordPress files
+  persistence:
+    enabled: true
+    storageClass: ""  # Use default storage class
+    accessMode: ReadWriteOnce
+    size: 10Gi
+
+# MySQL Configuration
+mysql:
+  image:
+    repository: mysql
+    tag: "5.6"
+    pullPolicy: IfNotPresent
+  
+  # Database configuration
+  database:
+    name: wordpress
+    user: root
+    password: wordpress  # Change this in production!
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 3306
+  
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  # Persistent storage for MySQL data
+  persistence:
+    enabled: true
+    storageClass: ""  # Use default storage class
+    accessMode: ReadWriteOnce
+    size: 20Gi
+
+# Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: krunky.xyz  # Change this to your domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # Example TLS configuration:
+  # tls:
+  #   - secretName: wordpress-tls
+  #     hosts:
+  #       - krunky.xyz
+
+# Environment-specific overrides
+environment: production  # or development, staging
+
+# Replica counts
+replicaCount:
+  wordpress: 1
+  mysql: 1
+
+# Node selector and tolerations (optional)
+nodeSelector: {}
+tolerations: []
+affinity: {}

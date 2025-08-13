@@ -1,0 +1,19 @@
+{{- if .Values.mysql.persistence.enabled }}
+# MySQL Persistent Volume Claim - Storage for MySQL database data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wordpress.fullname" . }}-mysql-pvc
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  accessModes:
+    - {{ .Values.mysql.persistence.accessMode }}
+  {{- if .Values.mysql.persistence.storageClass }}
+  storageClassName: {{ .Values.mysql.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mysql.persistence.size }}
+{{- end }}

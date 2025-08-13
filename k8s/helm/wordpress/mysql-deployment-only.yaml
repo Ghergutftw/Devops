@@ -1,0 +1,52 @@
+# MySQL Deployment - Manages MySQL database pods
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels:
+    app: wordpress
+spec:
+  selector:
+    matchLabels:
+      app: wordpress
+      tier: mysql
+  strategy:
+    type: Recreate    # Ensures only one MySQL instance runs at a time
+  template:
+    metadata:
+      labels:
+        app: wordpress
+        tier: mysql
+    spec:
+      containers:
+      - image: mysql:5.6
+        name: mysql
+        # Resource limits prevent MySQL from consuming too many cluster resources
+        resources:
+          requests:
+            memory: "512Mi"  # Minimum memory guaranteed
+            cpu: "250m"      # Minimum CPU guaranteed (0.25 cores)
+          limits:
+            memory: "1Gi"    # Maximum memory allowed
+            cpu: "500m"      # Maximum CPU allowed (0.5 cores)
+        env:
+        # Database root password from the secret we created above
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-pass
+              key: password
+        # Automatically creates a database named 'wordpress'
+        - name: MYSQL_DATABASE
+          value: wordpress
+        ports:
+        - containerPort: 3306
+          name: mysql
+        # Mount persistent storage to preserve data across pod restarts
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql  # MySQL data directory
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim

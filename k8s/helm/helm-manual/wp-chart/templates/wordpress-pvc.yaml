@@ -1,0 +1,14 @@
+# WordPress PVC - Storage for WordPress files and uploads
+# Note: Using emptyDir in deployment for demo - this creates a PVC for persistent storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-pv-claim
+  labels:
+    app: wordpress
+spec:
+  accessModes:
+    - ReadWriteOnce  # Only one pod can mount this volume at a time
+  resources:
+    requests:
+      storage: 10Gi  # Storage for WordPress files, themes, plugins, uploads

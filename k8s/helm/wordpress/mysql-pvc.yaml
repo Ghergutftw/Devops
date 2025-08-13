@@ -1,0 +1,14 @@
+# Persistent Volume Claim - Requests storage for MySQL data
+# This ensures data persists even if pods are recreated
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  labels:
+    app: wordpress
+spec:
+  accessModes:
+    - ReadWriteOnce  # Only one pod can mount this volume at a time
+  resources:
+    requests:
+      storage: 20Gi  # Adjust storage size based on your needs

@@ -1,0 +1,54 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tomcat-pdb
+  namespace: default
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: tomcat-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: default
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: rabbitmq
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: microservices-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: rmq-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mc-service-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mc-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-service-pdb
+  namespace: default
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: db-service

@@ -1,0 +1,14 @@
+# MySQL Service - Internal cluster communication endpoint
+# WordPress will connect to MySQL using this service name
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: wordpress
+spec:
+  ports:
+    - port: 3306      # MySQL standard port
+  selector:
+    app: wordpress
+    tier: mysql       # Routes traffic to MySQL pods

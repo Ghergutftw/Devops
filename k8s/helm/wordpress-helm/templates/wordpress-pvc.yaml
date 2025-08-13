@@ -1,0 +1,19 @@
+{{- if .Values.wordpress.persistence.enabled }}
+# WordPress Persistent Volume Claim - Storage for WordPress files, themes, plugins
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wordpress.fullname" . }}-wordpress-pvc
+  labels:
+    {{- include "wordpress.labels" . | nindent 4 }}
+    app.kubernetes.io/component: wordpress
+spec:
+  accessModes:
+    - {{ .Values.wordpress.persistence.accessMode }}
+  {{- if .Values.wordpress.persistence.storageClass }}
+  storageClassName: {{ .Values.wordpress.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.wordpress.persistence.size }}
+{{- end }}

@@ -1,0 +1,202 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rmq-service
+  namespace: default
+  labels:
+    app: rmq-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rmq-service
+  template:
+    metadata:
+      labels:
+        app: rmq-service
+    spec:
+      containers:
+      - name: rmq-service
+        image: your-registry/rmq-service:latest
+        ports:
+        - containerPort: 8081
+        env:
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: rabbitmq.host
+        - name: RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: username
+        - name: RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rmq-service
+  namespace: default
+spec:
+  selector:
+    app: rmq-service
+  ports:
+  - port: 80
+    targetPort: 8081
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mc-service
+  namespace: default
+  labels:
+    app: mc-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mc-service
+  template:
+    metadata:
+      labels:
+        app: mc-service
+    spec:
+      containers:
+      - name: mc-service
+        image: your-registry/mc-service:latest
+        ports:
+        - containerPort: 8082
+        env:
+        - name: MEMCACHE_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: memcache.servers
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8082
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8082
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mc-service
+  namespace: default
+spec:
+  selector:
+    app: mc-service
+  ports:
+  - port: 80
+    targetPort: 8082
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-service
+  namespace: default
+  labels:
+    app: db-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: db-service
+  template:
+    metadata:
+      labels:
+        app: db-service
+    spec:
+      containers:
+      - name: db-service
+        image: your-registry/db-service:latest
+        ports:
+        - containerPort: 8083
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: database.url
+        - name: DATABASE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: username
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: user-password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8083
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-service
+  namespace: default
+spec:
+  selector:
+    app: db-service
+  ports:
+  - port: 80
+    targetPort: 8083
+  type: ClusterIP

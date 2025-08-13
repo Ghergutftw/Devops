@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tomcat-service
+  namespace: default
+  labels:
+    app: tomcat-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tomcat-service
+  template:
+    metadata:
+      labels:
+        app: tomcat-service
+    spec:
+      containers:
+      - name: tomcat
+        image: tomcat:9-jre11
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: database.url
+        - name: RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: rabbitmq.host
+        - name: MEMCACHE_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: memcache.servers
+        - name: DATABASE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: username
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: user-password
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: app-config-volume
+          mountPath: /usr/local/tomcat/conf/application.properties
+          subPath: application.properties
+      volumes:
+      - name: app-config-volume
+        configMap:
+          name: app-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tomcat-service
+  namespace: default
+spec:
+  selector:
+    app: tomcat-service
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+
