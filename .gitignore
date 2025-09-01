@@ -3,6 +3,11 @@
 /secrets
 # ignore all .pem files
 *.pem
+*.zip
+*.tgz
+# Add these lines to .gitignore
+Vagrant/vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0.tgz
+Vagrant/vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0/
 
 *.csv
 
@@ -33,3 +38,4 @@ vagrant-vms/ubuntu/scripts/kafka_2.13-4.0.0/
 *.pub
 
 GitOps/actions
+
