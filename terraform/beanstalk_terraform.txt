@@ -1,0 +1,575 @@
+# variables.tf
+variable "app_name" {
+  description = "Application name"
+  type        = string
+  default     = "spring-boot-app"
+}
+
+variable "environment_name" {
+  description = "Environment name suffix"
+  type        = string
+  default     = "prod"
+}
+
+variable "docker_image_url" {
+  description = "Docker image URL (leave empty if using WAR deployment)"
+  type        = string
+  default     = ""
+}
+
+variable "war_file_s3_bucket" {
+  description = "S3 bucket containing WAR file (leave empty if using Docker)"
+  type        = string
+  default     = ""
+}
+
+variable "war_file_s3_key" {
+  description = "S3 key for WAR file (leave empty if using Docker)"
+  type        = string
+  default     = ""
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "min_size" {
+  description = "Minimum number of instances"
+  type        = number
+  default     = 2
+}
+
+variable "max_size" {
+  description = "Maximum number of instances"
+  type        = number
+  default     = 10
+}
+
+variable "regions" {
+  description = "AWS regions to deploy to"
+  type        = list(string)
+  default     = ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
+}
+
+variable "health_check_url" {
+  description = "Health check URL path"
+  type        = string
+  default     = "/actuator/health"
+}
+
+# main.tf
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# Data sources for AZs in each region
+data "aws_availability_zones" "available" {
+  for_each = toset(var.regions)
+  providers = {
+    aws = aws.region[each.key]
+  }
+  state = "available"
+}
+
+# Provider configurations for each region
+provider "aws" {
+  for_each = toset(var.regions)
+  alias    = "region"
+  region   = each.key
+}
+
+# S3 bucket for storing application versions (one per region)
+resource "aws_s3_bucket" "app_versions" {
+  for_each = toset(var.regions)
+  provider = aws.region[each.key]
+  bucket   = "${var.app_name}-versions-${each.key}-${random_string.suffix.result}"
+}
+
+resource "aws_s3_bucket_versioning" "app_versions" {
+  for_each = toset(var.regions)
+  provider = aws.region[each.key]
+  bucket   = aws_s3_bucket.app_versions[each.key].id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# VPC Configuration for each region
+resource "aws_vpc" "main" {
+  for_each         = toset(var.regions)
+  provider         = aws.region[each.key]
+  cidr_block       = "10.${index(var.regions, each.key)}.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name = "${var.app_name}-vpc-${each.key}"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  for_each = toset(var.regions)
+  provider = aws.region[each.key]
+  vpc_id   = aws_vpc.main[each.key].id
+
+  tags = {
+    Name = "${var.app_name}-igw-${each.key}"
+  }
+}
+
+# Public subnets across multiple AZs
+resource "aws_subnet" "public" {
+  for_each = {
+    for pair in setproduct(var.regions, range(2)) : "${pair[0]}-${pair[1]}" => {
+      region = pair[0]
+      az_index = pair[1]
+    }
+  }
+  
+  provider                = aws.region[each.value.region]
+  vpc_id                  = aws_vpc.main[each.value.region].id
+  cidr_block              = "10.${index(var.regions, each.value.region)}.${each.value.az_index + 1}.0/24"
+  availability_zone       = data.aws_availability_zones.available[each.value.region].names[each.value.az_index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.app_name}-public-${each.value.region}-${each.value.az_index + 1}"
+  }
+}
+
+# Private subnets across multiple AZs
+resource "aws_subnet" "private" {
+  for_each = {
+    for pair in setproduct(var.regions, range(2)) : "${pair[0]}-${pair[1]}" => {
+      region = pair[0]
+      az_index = pair[1]
+    }
+  }
+  
+  provider          = aws.region[each.value.region]
+  vpc_id            = aws_vpc.main[each.value.region].id
+  cidr_block        = "10.${index(var.regions, each.value.region)}.${each.value.az_index + 10}.0/24"
+  availability_zone = data.aws_availability_zones.available[each.value.region].names[each.value.az_index]
+
+  tags = {
+    Name = "${var.app_name}-private-${each.value.region}-${each.value.az_index + 1}"
+  }
+}
+
+# Route table for public subnets
+resource "aws_route_table" "public" {
+  for_each = toset(var.regions)
+  provider = aws.region[each.key]
+  vpc_id   = aws_vpc.main[each.key].id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main[each.key].id
+  }
+
+  tags = {
+    Name = "${var.app_name}-public-rt-${each.key}"
+  }
+}
+
+# Associate public subnets with route table
+resource "aws_route_table_association" "public" {
+  for_each = {
+    for pair in setproduct(var.regions, range(2)) : "${pair[0]}-${pair[1]}" => {
+      region = pair[0]
+      az_index = pair[1]
+    }
+  }
+
+  provider       = aws.region[each.value.region]
+  subnet_id      = aws_subnet.public["${each.value.region}-${each.value.az_index}"].id
+  route_table_id = aws_route_table.public[each.value.region].id
+}
+
+# Security Group for Beanstalk
+resource "aws_security_group" "beanstalk" {
+  for_each    = toset(var.regions)
+  provider    = aws.region[each.key]
+  name        = "${var.app_name}-beanstalk-sg-${each.key}"
+  description = "Security group for Elastic Beanstalk application"
+  vpc_id      = aws_vpc.main[each.key].id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main[each.key].cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.app_name}-beanstalk-sg-${each.key}"
+  }
+}
+
+# IAM Role for Beanstalk EC2 instances
+resource "aws_iam_role" "beanstalk_ec2_role" {
+  name = "${var.app_name}-beanstalk-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "beanstalk_ec2_web_tier" {
+  policy_arn = "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier"
+  role       = aws_iam_role.beanstalk_ec2_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "beanstalk_ec2_worker_tier" {
+  policy_arn = "arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier"
+  role       = aws_iam_role.beanstalk_ec2_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "beanstalk_ec2_multicontainer_docker" {
+  policy_arn = "arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker"
+  role       = aws_iam_role.beanstalk_ec2_role.name
+}
+
+resource "aws_iam_instance_profile" "beanstalk_ec2_profile" {
+  name = "${var.app_name}-beanstalk-ec2-profile"
+  role = aws_iam_role.beanstalk_ec2_role.name
+}
+
+# IAM Role for Beanstalk Service
+resource "aws_iam_role" "beanstalk_service_role" {
+  name = "${var.app_name}-beanstalk-service-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticbeanstalk.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "beanstalk_service" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService"
+  role       = aws_iam_role.beanstalk_service_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "beanstalk_health" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth"
+  role       = aws_iam_role.beanstalk_service_role.name
+}
+
+# Elastic Beanstalk Application
+resource "aws_elastic_beanstalk_application" "app" {
+  for_each    = toset(var.regions)
+  provider    = aws.region[each.key]
+  name        = "${var.app_name}-${each.key}"
+  description = "Spring Boot application deployed in ${each.key}"
+
+  appversion_lifecycle {
+    service_role          = aws_iam_role.beanstalk_service_role.arn
+    max_count            = 128
+    delete_source_from_s3 = true
+  }
+}
+
+# Application version for Docker deployment
+resource "aws_elastic_beanstalk_application_version" "docker_version" {
+  for_each    = var.docker_image_url != "" ? toset(var.regions) : []
+  provider    = aws.region[each.key]
+  name        = "${var.app_name}-docker-v1"
+  application = aws_elastic_beanstalk_application.app[each.key].name
+  description = "Docker version of ${var.app_name}"
+  bucket      = aws_s3_bucket.app_versions[each.key].id
+  key         = "${var.app_name}-dockerrun.zip"
+
+  depends_on = [aws_s3_object.dockerrun]
+}
+
+# Create Dockerrun.aws.json and upload to S3
+resource "aws_s3_object" "dockerrun" {
+  for_each = var.docker_image_url != "" ? toset(var.regions) : []
+  provider = aws.region[each.key]
+  bucket   = aws_s3_bucket.app_versions[each.key].id
+  key      = "${var.app_name}-dockerrun.zip"
+  source   = data.archive_file.dockerrun[each.key].output_path
+  etag     = data.archive_file.dockerrun[each.key].output_md5
+}
+
+data "archive_file" "dockerrun" {
+  for_each = var.docker_image_url != "" ? toset(var.regions) : []
+  type     = "zip"
+  output_path = "/tmp/dockerrun-${each.key}.zip"
+  
+  source {
+    content = jsonencode({
+      AWSEBDockerrunVersion = "1"
+      Image = {
+        Name = var.docker_image_url
+        Update = "true"
+      }
+      Ports = [
+        {
+          ContainerPort = 8080
+          HostPort = 80
+        }
+      ]
+      Logging = "/var/log/nginx"
+    })
+    filename = "Dockerrun.aws.json"
+  }
+}
+
+# Application version for WAR deployment
+resource "aws_elastic_beanstalk_application_version" "war_version" {
+  for_each    = var.war_file_s3_bucket != "" && var.war_file_s3_key != "" ? toset(var.regions) : []
+  provider    = aws.region[each.key]
+  name        = "${var.app_name}-war-v1"
+  application = aws_elastic_beanstalk_application.app[each.key].name
+  description = "WAR version of ${var.app_name}"
+  bucket      = var.war_file_s3_bucket
+  key         = var.war_file_s3_key
+}
+
+# Determine platform ARN based on deployment type
+locals {
+  platform_arn_docker = "arn:aws:elasticbeanstalk:us-east-1::platform/Docker running on 64bit Amazon Linux 2/3.5.8"
+  platform_arn_java   = "arn:aws:elasticbeanstalk:us-east-1::platform/Corretto 17 running on 64bit Amazon Linux 2/3.4.8"
+  
+  is_docker_deployment = var.docker_image_url != ""
+  selected_platform = local.is_docker_deployment ? local.platform_arn_docker : local.platform_arn_java
+}
+
+# Elastic Beanstalk Environment
+resource "aws_elastic_beanstalk_environment" "env" {
+  for_each            = toset(var.regions)
+  provider            = aws.region[each.key]
+  name                = "${var.app_name}-${var.environment_name}-${each.key}"
+  application         = aws_elastic_beanstalk_application.app[each.key].name
+  solution_stack_name = local.selected_platform
+  version_label       = local.is_docker_deployment ? aws_elastic_beanstalk_application_version.docker_version[each.key].name : (var.war_file_s3_bucket != "" ? aws_elastic_beanstalk_application_version.war_version[each.key].name : null)
+
+  # VPC Configuration
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "VPCId"
+    value     = aws_vpc.main[each.key].id
+  }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "Subnets"
+    value     = join(",", [for s in aws_subnet.private : s.id if startswith(s.tags.Name, "${var.app_name}-private-${each.key}")])
+  }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "ELBSubnets"
+    value     = join(",", [for s in aws_subnet.public : s.id if startswith(s.tags.Name, "${var.app_name}-public-${each.key}")])
+  }
+
+  # Auto Scaling Configuration
+  setting {
+    namespace = "aws:autoscaling:asg"
+    name      = "MinSize"
+    value     = var.min_size
+  }
+
+  setting {
+    namespace = "aws:autoscaling:asg"
+    name      = "MaxSize"
+    value     = var.max_size
+  }
+
+  setting {
+    namespace = "aws:autoscaling:asg"
+    name      = "Availability Zones"
+    value     = "Any 2"
+  }
+
+  # Instance Configuration
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "InstanceType"
+    value     = var.instance_type
+  }
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "IamInstanceProfile"
+    value     = aws_iam_instance_profile.beanstalk_ec2_profile.name
+  }
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "SecurityGroups"
+    value     = aws_security_group.beanstalk[each.key].id
+  }
+
+  # Load Balancer Configuration
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "EnvironmentType"
+    value     = "LoadBalanced"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "LoadBalancerType"
+    value     = "application"
+  }
+
+  setting {
+    namespace = "aws:elbv2:loadbalancer"
+    name      = "SecurityGroups"
+    value     = aws_security_group.beanstalk[each.key].id
+  }
+
+  # Health Check Configuration
+  setting {
+    namespace = "aws:elasticbeanstalk:healthreporting:system"
+    name      = "SystemType"
+    value     = "enhanced"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application"
+    name      = "Application Healthcheck URL"
+    value     = var.health_check_url
+  }
+
+  # Rolling Updates
+  setting {
+    namespace = "aws:autoscaling:updatepolicy:rollingupdate"
+    name      = "RollingUpdateEnabled"
+    value     = "true"
+  }
+
+  setting {
+    namespace = "aws:autoscaling:updatepolicy:rollingupdate"
+    name      = "MaxBatchSize"
+    value     = "2"
+  }
+
+  setting {
+    namespace = "aws:autoscaling:updatepolicy:rollingupdate"
+    name      = "MinInstancesInService"
+    value     = "1"
+  }
+
+  # Environment Variables for Spring Boot
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "SERVER_PORT"
+    value     = "8080"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "SPRING_PROFILES_ACTIVE"
+    value     = "production"
+  }
+
+  # JVM Settings (for Java/WAR deployments)
+  dynamic "setting" {
+    for_each = local.is_docker_deployment ? [] : [1]
+    content {
+      namespace = "aws:elasticbeanstalk:container:java:jvm"
+      name      = "Xmx"
+      value     = "512m"
+    }
+  }
+
+  dynamic "setting" {
+    for_each = local.is_docker_deployment ? [] : [1]
+    content {
+      namespace = "aws:elasticbeanstalk:container:java:jvm"
+      name      = "Xms"
+      value     = "256m"
+    }
+  }
+
+  tags = {
+    Name        = "${var.app_name}-${var.environment_name}-${each.key}"
+    Environment = var.environment_name
+    Region      = each.key
+  }
+}
+
+# outputs.tf
+output "application_urls" {
+  description = "URLs of the deployed applications in each region"
+  value = {
+    for region in var.regions : region => aws_elastic_beanstalk_environment.env[region].endpoint_url
+  }
+}
+
+output "load_balancer_urls" {
+  description = "Load balancer URLs for each region"
+  value = {
+    for region in var.regions : region => "http://${aws_elastic_beanstalk_environment.env[region].cname}"
+  }
+}
+
+output "environment_names" {
+  description = "Beanstalk environment names in each region"
+  value = {
+    for region in var.regions : region => aws_elastic_beanstalk_environment.env[region].name
+  }
+}
+
+output "application_names" {
+  description = "Beanstalk application names in each region"
+  value = {
+    for region in var.regions : region => aws_elastic_beanstalk_application.app[region].name
+  }
+}
+
+output "s3_buckets" {
+  description = "S3 buckets used for application versions in each region"
+  value = {
+    for region in var.regions : region => aws_s3_bucket.app_versions[region].id
+  }
+}
