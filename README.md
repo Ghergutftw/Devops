@@ -1,3 +1,6 @@
+## Here are my notes
+https://www.notion.so/DevOps-1d988f47f38080058c62f53fa2ba0d4f?source=copy_link
+
 # DevOps Learning Journey
 
 This repository contains comprehensive hands-on projects and learning materials covering various DevOps tools and practices. Each section demonstrates practical implementation and real-world scenarios.
